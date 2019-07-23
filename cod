@@ -1,0 +1,244 @@
+//initalizarile pentru buton
+int button = 10;
+int circuit = 2000; //milisecundele de apasare pentru a se activa circuitul
+int labirint = 100;//milisecundele de apasare pentru a se activa labirintul
+float apasare = 0;
+
+int ledrosu = 2;
+int ledverde = 4;
+
+//initializarile senzorilor de distanta
+int v[4];
+int trig_dreapta = 7;
+int echo_dreapta = A2;
+int trig_fata = 6;
+int echo_fata = A3;
+int trig_stanga = 5;
+int echo_stanga = A4;
+
+/// Motor A
+#define dirA 12
+#define speedA 3
+#define brakeA 9
+
+/// Motor B
+#define dirB 13
+#define speedB 11
+#define brakeB 8
+
+
+
+void setup() {
+  // put your setup code here, to run once:
+  // Serial.begin(9600);
+
+  pinMode(ledrosu, OUTPUT);
+  pinMode(ledverde, OUTPUT);
+  digitalWrite(ledrosu, LOW);
+  digitalWrite(ledverde, LOW);
+
+  pinMode(trig_dreapta, OUTPUT);
+  pinMode(echo_dreapta, INPUT);
+  //digitalWrite(trig_dreapta, LOW);
+
+  pinMode(trig_fata, OUTPUT);
+  pinMode(echo_fata, INPUT);
+  //digitalWrite(fata_trigPin, LOW);
+
+  pinMode(trig_stanga, OUTPUT);
+  pinMode(echo_stanga, INPUT);
+  //digitalWrite(trig_stanga, LOW);
+  pinMode(button, INPUT_PULLUP);
+  pinMode(dirA, OUTPUT);
+  pinMode(dirB, OUTPUT);
+  digitalWrite(dirA, HIGH);
+  digitalWrite(dirB, HIGH);
+  setSpeeds(0, 0); // m-am asigurat ca la inceput Bob va sta
+}
+
+void valori()///afiseaza valorile senzorilor si pune frana pe motoare
+{
+  digitalWrite(brakeA, HIGH);
+  digitalWrite(brakeB, HIGH);
+  v[1] = distanta(trig_stanga, echo_stanga);
+  v[2] = distanta(trig_fata, echo_fata);
+  v[3] = distanta(trig_dreapta, echo_dreapta);
+  Serial.print(v[1]);
+  Serial.print(' ');
+  Serial.print(v[2]);
+  Serial.print(' ');
+  Serial.print(v[3]);
+  Serial.print('\n');
+}
+
+float distanta(int trigPin, int echoPin) {
+  //float viteza,timp,distanta;
+  float timp;
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+  timp = pulseIn(echoPin, HIGH);
+  //int temperatura=20; ///Celsius
+  //viteza=(331.5+0.607*temperatura);//vSunet_m/s
+  //distanta=timp*viteza/2*100;///m->cm
+  return timp / 58; //The SRF04 provides an echo pulse proportional to distanta.uS/58=cm //restul despre senzori pe https://www.robot-electronics.co.uk/htm/srf05tech.htm
+}
+
+void setSpeeds(int left, int right)
+{
+  //Frana
+  if (left == 0)digitalWrite(brakeA, HIGH); //A
+  if (right == 0)digitalWrite(brakeB, HIGH); //B
+  if (left != 0) //A
+  {
+    digitalWrite(brakeA, LOW);
+    analogWrite(speedA, left);
+  }
+  if (right != 0)//B
+  {
+    digitalWrite(brakeB, LOW);
+    analogWrite(speedB, right);
+  }
+  /*//Directie
+    if (left >= 0) //A
+    {
+      digitalWrite(dirA, HIGH);
+    }
+    else
+    {
+      digitalWrite(dirA, LOW);
+      left *= -1;
+    }
+    if (right >= 0) //B
+    {
+      digitalWrite(dirB, HIGH);
+    }
+    else
+    {
+      digitalWrite(dirB, LOW);
+      right *= -1;
+    }*/
+  //Viteza
+
+}
+
+float error, lastError = 0;
+int vitezamotor;
+int kp = 4, kd = 5; //fara integrale
+int viteza_minima = 80, viteza_maxima = 120;// valoarea vitezelor se pune in functie de teste
+int vitezastanga, vitezadreapta;
+int maxspeed = 60, minspeed = 50;
+
+
+void loop() {
+  while (digitalRead(button) == LOW)
+  { delay(100);
+    apasare +=  100;
+  }
+  if (apasare >= circuit )
+  {
+    delay(50);
+    v[1] = distanta(trig_stanga, echo_stanga); //dist stanga
+    v[3] = distanta(trig_dreapta, echo_dreapta); //dist stanga
+    error = v[1] - v[3];
+    if (error < -20)error = -20;
+    if (error > 20)error = 20;
+    vitezamotor = kp * error + kd * (error - lastError);
+    lastError = error;
+
+    vitezastanga = viteza_minima - vitezamotor;
+    vitezadreapta = viteza_minima + vitezamotor;
+
+    if (vitezastanga > viteza_maxima)vitezastanga = viteza_maxima;
+    if (vitezadreapta > viteza_maxima)vitezadreapta = viteza_maxima;
+    if (vitezastanga < 0)vitezastanga = 5;
+    if (vitezadreapta < 0)vitezadreapta = 5;
+    setSpeeds(vitezastanga, vitezadreapta);
+
+    digitalWrite(ledrosu, HIGH);
+    digitalWrite(ledverde, LOW);
+    while (digitalRead(button) == LOW)
+    { delay(100);
+      apasare +=  100;
+    }
+  }
+
+  else if (apasare >= labirint) 
+    {
+      digitalWrite(ledverde, HIGH);
+      digitalWrite(ledrosu, LOW);
+      //Start();
+
+      v[1] = distanta(trig_stanga, echo_stanga);
+      v[2] = distanta(trig_fata, echo_fata);
+      v[3] = distanta(trig_dreapta, echo_dreapta);
+      digitalWrite(dirA, HIGH);
+      digitalWrite(dirB, HIGH);
+      if (v[2] > 9)
+      {
+        setSpeeds(maxspeed, maxspeed);
+        digitalWrite(dirA, HIGH);
+        digitalWrite(dirB, HIGH);
+
+ /*if (v[3] > 4 && v[3] < 13)
+    { setSpeeds(maxspeed, maxspeed);
+    }
+    if (v[3] >= 10);
+    {
+      setSpeeds(maxspeed, minspeed);
+    }*/
+    /*if (v[3] <= 8);
+    {
+      setSpeeds(minspeed, maxspeed);
+
+    }
+     if (v[1] <= 8);
+    {
+      setSpeeds(maxspeed, minspeed);
+
+    }*/
+      }
+
+      if (v[1] <= 20 && v[3] > 20 && v[2] <= 10)
+      { //Stop();
+        dreapta();
+      }
+      if (v[1] > 20 && v[3] > 20 && v[2] <= 9)
+      { dreapta();
+        //Stop();
+      }
+      if (v[3] <= 20 && v[1] > 20 && v[2] <= 9)
+      { stanga();
+        //Stop();
+      }
+     if (v[3] <= 20 && v[1] <= 20 && v[2] <= 9)
+      {
+        inapoi();
+        
+      }
+           if (v[3] >= 20 && v[1] > 20 && v[2] >= 20)
+           setSpeeds(0,0);
+    }
+  }
+
+
+void stanga()
+{
+  setSpeeds(0, 65);
+  delay(800);
+}
+
+void dreapta()
+{
+  setSpeeds(65, 0);
+  delay(800);
+}
+
+void inapoi()
+{ setSpeeds(minspeed, maxspeed);
+  digitalWrite(dirA, HIGH);
+  digitalWrite(dirB, LOW);
+  delay(1000);
+}
